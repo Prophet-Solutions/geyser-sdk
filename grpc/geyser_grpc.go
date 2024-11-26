@@ -7,9 +7,11 @@ import (
 	"io"
 	"slices"
 	"sync"
+	"time"
 
 	geyser_pb "github.com/Prophet-Solutions/geyser-sdk/pb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -41,6 +43,10 @@ func New(ctx context.Context, grpcDialURL string, useGzipCompression bool, md me
 	conn, err := createAndObserveGRPCConn(ctx, ch, gRPCConnOptions{
 		Target:             grpcDialURL,
 		UseGzipCompression: useGzipCompression,
+		ClientParameters: &keepalive.ClientParameters{
+			Time:    time.Second * 10,
+			Timeout: time.Second * 10,
+		},
 	})
 	if err != nil {
 		return nil, err

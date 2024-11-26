@@ -17,6 +17,7 @@ func ConvertTransaction(geyserTx *geyser_pb.SubscribeUpdateTransaction) (*rpc.Ge
 	meta := geyserTx.Transaction.Meta
 	transaction := geyserTx.Transaction.Transaction
 
+	tx.Meta = &rpc.TransactionMeta{}
 	tx.Meta.PreBalances = meta.PreBalances
 	tx.Meta.PostBalances = meta.PostBalances
 	tx.Meta.Err = meta.Err
@@ -55,15 +56,23 @@ func ConvertTransaction(geyserTx *geyser_pb.SubscribeUpdateTransaction) (*rpc.Ge
 	}
 
 	for i, innerInst := range meta.InnerInstructions {
-		tx.Meta.InnerInstructions[i].Index = uint16(innerInst.Index)
+		tx.Meta.InnerInstructions = append(tx.Meta.InnerInstructions, rpc.InnerInstruction{
+			Index: uint16(innerInst.Index),
+		})
 		for x, inst := range innerInst.Instructions {
 			accounts, err := bytesToUint16Slice(inst.Accounts)
 			if err != nil {
 				return nil, err
 			}
 
-			tx.Meta.InnerInstructions[i].Instructions[x].Accounts = accounts
-			tx.Meta.InnerInstructions[i].Instructions[x].ProgramIDIndex = uint16(inst.ProgramIdIndex)
+			tx.Meta.InnerInstructions[i].Instructions = append(
+				tx.Meta.InnerInstructions[i].Instructions,
+				solana.CompiledInstruction{
+					ProgramIDIndex: uint16(inst.ProgramIdIndex),
+					Accounts:       accounts,
+				},
+			)
+
 			if err = tx.Meta.InnerInstructions[i].Instructions[x].Data.UnmarshalJSON(inst.Data); err != nil {
 				return nil, err
 			}
@@ -88,6 +97,10 @@ func ConvertTransaction(geyserTx *geyser_pb.SubscribeUpdateTransaction) (*rpc.Ge
 
 	for _, writableAddress := range meta.LoadedWritableAddresses {
 		tx.Meta.LoadedAddresses.ReadOnly = append(tx.Meta.LoadedAddresses.ReadOnly, solana.PublicKeyFromBytes(writableAddress))
+	}
+
+	if tx.Transaction == nil {
+		return nil, fmt.Errorf("transaction is empty")
 	}
 
 	solTx, err := tx.Transaction.GetTransaction()

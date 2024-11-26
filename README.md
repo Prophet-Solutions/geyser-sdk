@@ -7,7 +7,7 @@ Geyser SDK is a Go client library for interacting with the Geyser API. It provid
 ## Features
 
 - **gRPC Client**: Connect to Geyser nodes using gRPC and subscribe to various Solana blockchain events.
-- **WebSocket Client**: Use WebSocket connections to subscribe to events in real-time.
+- **Enhanced WebSocket Client**: Use Geyser Enhanced WebSocket connections to subscribe to events in real-time.
 - **Event Subscriptions**: Subscribe to transactions, accounts, slots, blocks, block metadata, and entries.
 - **Data Conversion**: Convert Geyser transaction and block data into Solana Go SDK types.
 - **Automated Protobuf Generation**: Use Docker to automate the generation of Go code from protobuf definitions.
@@ -17,7 +17,7 @@ Geyser SDK is a Go client library for interacting with the Geyser API. It provid
 - [Installation](#installation)
 - [Usage](#usage)
   - [gRPC Client](#grpc-client)
-  - [WebSocket Client](#websocket-client)
+  - [Enhanced WebSocket Client](#enhanced-websocket-client)
 - [Protobuf Generation](#protobuf-generation)
 - [Contributing](#contributing)
 - [License](#license)
@@ -52,11 +52,11 @@ Set up channels to receive updates and errors from the stream. Implement your lo
 
 Always close the client when it's no longer needed to gracefully terminate the connection and free up resources.
 
-### WebSocket Client
+### Enhanced WebSocket Client
 
 #### Connecting to a Geyser Enhanced WebSocket
 
-Instantiate the WebSocket client with the Geyser node's WebSocket endpoint. Establish the connection to start interacting with the node in real-time.
+Instantiate the Enhanced WebSocket client with the Geyser node's WebSocket endpoint (tested with Helius). Establish the connection to start interacting with the node in real-time.
 
 #### Subscribing to Transactions and Accounts
 
@@ -66,9 +66,9 @@ Subscribe to transactions and account updates by specifying filters and options.
 
 Listen to the channels provided by the subscriptions to receive real-time updates. Process the data according to your application's requirements.
 
-#### Closing the WebSocket Client
+#### Closing the Enhanced WebSocket Client
 
-Close the WebSocket client to terminate the connection and ensure that all resources are properly released.
+Close the Enhanced WebSocket client to terminate the connection and ensure that all resources are properly released.
 
 ## Protobuf Generation
 

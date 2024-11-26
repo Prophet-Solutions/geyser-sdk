@@ -1,4 +1,4 @@
-package geyser_ws
+package geyser_enhanced_ws
 
 import (
 	"context"

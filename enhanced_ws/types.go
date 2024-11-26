@@ -1,4 +1,4 @@
-package geyser_ws
+package geyser_enhanced_ws
 
 // TransactionSubscribeFilter defines the filter parameters for transaction subscriptions.
 type TransactionSubscribeFilter struct {

@@ -15,20 +15,20 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-type client struct {
+type Client struct {
 	grpcConn *grpc.ClientConn
 	Ctx      context.Context
 	Geyser   geyser_pb.GeyserClient
 	ErrCh    chan error
-	s        *streamManager
+	s        *StreamManager
 }
 
-type streamManager struct {
-	clients map[string]*streamClient
+type StreamManager struct {
+	clients map[string]*StreamClient
 	mu      sync.RWMutex
 }
 
-type streamClient struct {
+type StreamClient struct {
 	Ctx      context.Context
 	geyser   geyser_pb.Geyser_SubscribeClient
 	request  *geyser_pb.SubscribeRequest
@@ -38,7 +38,7 @@ type streamClient struct {
 }
 
 // New creates a new Client instance.
-func New(ctx context.Context, grpcDialURL string, useGzipCompression bool, md metadata.MD) (*client, error) {
+func New(ctx context.Context, grpcDialURL string, useGzipCompression bool, md metadata.MD) (*Client, error) {
 	ch := make(chan error)
 	conn, err := createAndObserveGRPCConn(ctx, ch, gRPCConnOptions{
 		Target:             grpcDialURL,
@@ -58,32 +58,32 @@ func New(ctx context.Context, grpcDialURL string, useGzipCompression bool, md me
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 
-	return &client{
+	return &Client{
 		grpcConn: conn,
 		Ctx:      ctx,
 		Geyser:   geyserClient,
 		ErrCh:    ch,
-		s: &streamManager{
-			clients: make(map[string]*streamClient),
+		s: &StreamManager{
+			clients: make(map[string]*StreamClient),
 			mu:      sync.RWMutex{},
 		},
 	}, nil
 }
 
 // Close closes the client and all the streams.
-func (c *client) Close() error {
+func (c *Client) Close() error {
 	for _, sc := range c.s.clients {
 		sc.Stop()
 	}
 	return c.grpcConn.Close()
 }
 
-func (c *client) Ping(count int32) (*geyser_pb.PongResponse, error) {
+func (c *Client) Ping(count int32) (*geyser_pb.PongResponse, error) {
 	return c.Geyser.Ping(c.Ctx, &geyser_pb.PingRequest{Count: count})
 }
 
 // AddStreamClient creates a new Geyser subscribe stream client. You can retrieve it with GetStreamClient.
-func (c *client) AddStreamClient(ctx context.Context, streamName string, commitmentLevel *geyser_pb.CommitmentLevel, opts ...grpc.CallOption) error {
+func (c *Client) AddStreamClient(ctx context.Context, streamName string, commitmentLevel *geyser_pb.CommitmentLevel, opts ...grpc.CallOption) error {
 	c.s.mu.Lock()
 	defer c.s.mu.Unlock()
 
@@ -96,7 +96,7 @@ func (c *client) AddStreamClient(ctx context.Context, streamName string, commitm
 		return err
 	}
 
-	streamClient := &streamClient{
+	streamClient := &StreamClient{
 		Ctx:    ctx,
 		geyser: stream,
 		request: &geyser_pb.SubscribeRequest{
@@ -121,35 +121,35 @@ func (c *client) AddStreamClient(ctx context.Context, streamName string, commitm
 	return nil
 }
 
-func (s *streamClient) Stop() {
+func (s *StreamClient) Stop() {
 	s.Ctx.Done()
 	close(s.UpdateCh)
 	close(s.ErrCh)
 }
 
 // GetStreamClient returns a StreamClient for the given streamName from the client's map.
-func (c *client) GetStreamClient(streamName string) *streamClient {
+func (c *Client) GetStreamClient(streamName string) *StreamClient {
 	defer c.s.mu.RUnlock()
 	c.s.mu.RLock()
 	return c.s.clients[streamName]
 }
 
 // SetRequest sets a custom request to be used across all methods.
-func (s *streamClient) SetRequest(req *geyser_pb.SubscribeRequest) {
+func (s *StreamClient) SetRequest(req *geyser_pb.SubscribeRequest) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.request = req
 }
 
 // SetCommitmentLevel modifies the commitment level of the stream's request.
-func (s *streamClient) SetCommitmentLevel(commitmentLevel *geyser_pb.CommitmentLevel) {
+func (s *StreamClient) SetCommitmentLevel(commitmentLevel *geyser_pb.CommitmentLevel) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.request.Commitment = commitmentLevel
 }
 
 // NewRequest creates a new empty *geyser_pb.SubscribeRequest.
-func (s *streamClient) NewRequest() *geyser_pb.SubscribeRequest {
+func (s *StreamClient) NewRequest() *geyser_pb.SubscribeRequest {
 	return &geyser_pb.SubscribeRequest{
 		Accounts:           make(map[string]*geyser_pb.SubscribeRequestFilterAccounts),
 		Slots:              make(map[string]*geyser_pb.SubscribeRequestFilterSlots),
@@ -163,18 +163,18 @@ func (s *streamClient) NewRequest() *geyser_pb.SubscribeRequest {
 }
 
 // SendCustomRequest sends a custom *geyser_pb.SubscribeRequest using the Geyser client.
-func (s *streamClient) SendCustomRequest(request *geyser_pb.SubscribeRequest) error {
+func (s *StreamClient) SendCustomRequest(request *geyser_pb.SubscribeRequest) error {
 	return s.geyser.Send(request)
 }
 
-func (s *streamClient) sendRequest() error {
+func (s *StreamClient) sendRequest() error {
 	return s.geyser.Send(s.request)
 }
 
 // SubscribeAccounts subscribes to account updates.
 // Note: This will overwrite existing subscriptions for the given ID.
 // To add new accounts without overwriting, use AppendAccounts.
-func (s *streamClient) SubscribeAccounts(filterName string, req *geyser_pb.SubscribeRequestFilterAccounts) error {
+func (s *StreamClient) SubscribeAccounts(filterName string, req *geyser_pb.SubscribeRequestFilterAccounts) error {
 	s.mu.Lock()
 	s.request.Accounts[filterName] = req
 	s.mu.Unlock()
@@ -182,20 +182,20 @@ func (s *streamClient) SubscribeAccounts(filterName string, req *geyser_pb.Subsc
 }
 
 // GetAccounts returns all account addresses for the given filter name.
-func (s *streamClient) GetAccounts(filterName string) []string {
+func (s *StreamClient) GetAccounts(filterName string) []string {
 	defer s.mu.RUnlock()
 	s.mu.RLock()
 	return s.request.Accounts[filterName].Account
 }
 
 // AppendAccounts appends accounts to an existing subscription and sends the request.
-func (s *streamClient) AppendAccounts(filterName string, accounts ...string) error {
+func (s *StreamClient) AppendAccounts(filterName string, accounts ...string) error {
 	s.request.Accounts[filterName].Account = append(s.request.Accounts[filterName].Account, accounts...)
 	return s.geyser.Send(s.request)
 }
 
 // UnsubscribeAccounts unsubscribes specific accounts.
-func (s *streamClient) UnsubscribeAccounts(filterName string, accounts ...string) error {
+func (s *StreamClient) UnsubscribeAccounts(filterName string, accounts ...string) error {
 	defer s.mu.Unlock()
 	s.mu.Lock()
 	if filter, exists := s.request.Accounts[filterName]; exists {
@@ -206,92 +206,92 @@ func (s *streamClient) UnsubscribeAccounts(filterName string, accounts ...string
 	return s.sendRequest()
 }
 
-func (s *streamClient) UnsubscribeAllAccounts(filterName string) error {
+func (s *StreamClient) UnsubscribeAllAccounts(filterName string) error {
 	delete(s.request.Accounts, filterName)
 	return s.geyser.Send(s.request)
 }
 
 // SubscribeSlots subscribes to slot updates.
-func (s *streamClient) SubscribeSlots(filterName string, req *geyser_pb.SubscribeRequestFilterSlots) error {
+func (s *StreamClient) SubscribeSlots(filterName string, req *geyser_pb.SubscribeRequestFilterSlots) error {
 	s.request.Slots[filterName] = req
 	return s.geyser.Send(s.request)
 }
 
 // UnsubscribeSlots unsubscribes from slot updates.
-func (s *streamClient) UnsubscribeSlots(filterName string) error {
+func (s *StreamClient) UnsubscribeSlots(filterName string) error {
 	delete(s.request.Slots, filterName)
 	return s.geyser.Send(s.request)
 }
 
 // SubscribeTransaction subscribes to transaction updates.
-func (s *streamClient) SubscribeTransaction(filterName string, req *geyser_pb.SubscribeRequestFilterTransactions) error {
+func (s *StreamClient) SubscribeTransaction(filterName string, req *geyser_pb.SubscribeRequestFilterTransactions) error {
 	s.request.Transactions[filterName] = req
 	return s.geyser.Send(s.request)
 }
 
 // UnsubscribeTransaction unsubscribes from transaction updates.
-func (s *streamClient) UnsubscribeTransaction(filterName string) error {
+func (s *StreamClient) UnsubscribeTransaction(filterName string) error {
 	delete(s.request.Transactions, filterName)
 	return s.geyser.Send(s.request)
 }
 
 // SubscribeTransactionStatus subscribes to transaction status updates.
-func (s *streamClient) SubscribeTransactionStatus(filterName string, req *geyser_pb.SubscribeRequestFilterTransactions) error {
+func (s *StreamClient) SubscribeTransactionStatus(filterName string, req *geyser_pb.SubscribeRequestFilterTransactions) error {
 	s.request.TransactionsStatus[filterName] = req
 	return s.geyser.Send(s.request)
 }
 
-func (s *streamClient) UnsubscribeTransactionStatus(filterName string) error {
+func (s *StreamClient) UnsubscribeTransactionStatus(filterName string) error {
 	delete(s.request.TransactionsStatus, filterName)
 	return s.geyser.Send(s.request)
 }
 
 // SubscribeBlocks subscribes to block updates.
-func (s *streamClient) SubscribeBlocks(filterName string, req *geyser_pb.SubscribeRequestFilterBlocks) error {
+func (s *StreamClient) SubscribeBlocks(filterName string, req *geyser_pb.SubscribeRequestFilterBlocks) error {
 	s.request.Blocks[filterName] = req
 	return s.geyser.Send(s.request)
 }
 
-func (s *streamClient) UnsubscribeBlocks(filterName string) error {
+func (s *StreamClient) UnsubscribeBlocks(filterName string) error {
 	delete(s.request.Blocks, filterName)
 	return s.geyser.Send(s.request)
 }
 
 // SubscribeBlocksMeta subscribes to block metadata updates.
-func (s *streamClient) SubscribeBlocksMeta(filterName string, req *geyser_pb.SubscribeRequestFilterBlocksMeta) error {
+func (s *StreamClient) SubscribeBlocksMeta(filterName string, req *geyser_pb.SubscribeRequestFilterBlocksMeta) error {
 	s.request.BlocksMeta[filterName] = req
 	return s.geyser.Send(s.request)
 }
 
-func (s *streamClient) UnsubscribeBlocksMeta(filterName string) error {
+func (s *StreamClient) UnsubscribeBlocksMeta(filterName string) error {
 	delete(s.request.BlocksMeta, filterName)
 	return s.geyser.Send(s.request)
 }
 
 // SubscribeEntry subscribes to entry updates.
-func (s *streamClient) SubscribeEntry(filterName string, req *geyser_pb.SubscribeRequestFilterEntry) error {
+func (s *StreamClient) SubscribeEntry(filterName string, req *geyser_pb.SubscribeRequestFilterEntry) error {
 	s.request.Entry[filterName] = req
 	return s.geyser.Send(s.request)
 }
 
-func (s *streamClient) UnsubscribeEntry(filterName string) error {
+func (s *StreamClient) UnsubscribeEntry(filterName string) error {
 	delete(s.request.Entry, filterName)
 	return s.geyser.Send(s.request)
 }
 
 // SubscribeAccountDataSlice subscribes to account data slice updates.
-func (s *streamClient) SubscribeAccountDataSlice(req []*geyser_pb.SubscribeRequestAccountsDataSlice) error {
+func (s *StreamClient) SubscribeAccountDataSlice(req []*geyser_pb.SubscribeRequestAccountsDataSlice) error {
 	s.request.AccountsDataSlice = req
 	return s.geyser.Send(s.request)
 }
 
-func (s *streamClient) UnsubscribeAccountDataSlice() error {
+func (s *StreamClient) UnsubscribeAccountDataSlice() error {
 	s.request.AccountsDataSlice = nil
 	return s.geyser.Send(s.request)
 }
 
 // listen starts listening for responses and errors.
-func (s *streamClient) listen() {
+func (s *StreamClient) listen() {
 	defer close(s.UpdateCh)
 	defer close(s.ErrCh)
 

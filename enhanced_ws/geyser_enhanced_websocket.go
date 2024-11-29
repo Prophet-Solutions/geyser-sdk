@@ -11,11 +11,11 @@ import (
 )
 
 // Client represents a Geyser WebSocket client.
-type client struct {
+type Client struct {
 	wsConn        *websocket.Conn
 	endpoint      string
 	mu            sync.Mutex
-	subscriptions map[string]*subscription
+	subscriptions map[string]*Subscription
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
@@ -23,7 +23,7 @@ type client struct {
 }
 
 // Subscription represents a subscription to the Geyser WebSocket.
-type subscription struct {
+type Subscription struct {
 	ID       string
 	Method   string
 	Params   interface{}
@@ -31,16 +31,16 @@ type subscription struct {
 }
 
 // NewClient creates a new Geyser WebSocket client.
-func NewClient(endpoint string) *client {
-	return &client{
+func NewClient(endpoint string) *Client {
+	return &Client{
 		endpoint:      endpoint,
-		subscriptions: make(map[string]*subscription),
+		subscriptions: make(map[string]*Subscription),
 		ErrCh:         make(chan error),
 	}
 }
 
 // Connect establishes the WebSocket connection.
-func (c *client) Connect() error {
+func (c *Client) Connect() error {
 	u, err := url.Parse(c.endpoint)
 	if err != nil {
 		return fmt.Errorf("invalid endpoint URL: %w", err)
@@ -62,7 +62,7 @@ func (c *client) Connect() error {
 }
 
 // Close closes the WebSocket connection and cancels all subscriptions.
-func (c *client) Close() error {
+func (c *Client) Close() error {
 	c.cancel()
 	err := c.wsConn.Close()
 	c.wg.Wait()
@@ -71,7 +71,7 @@ func (c *client) Close() error {
 }
 
 // TransactionSubscribe sends a transaction subscription request and returns a channel to receive messages.
-func (c *client) TransactionSubscribe(subscriptionID string, filter TransactionSubscribeFilter, options *TransactionSubscribeOptions) (chan interface{}, error) {
+func (c *Client) TransactionSubscribe(subscriptionID string, filter TransactionSubscribeFilter, options *TransactionSubscribeOptions) (chan interface{}, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -79,7 +79,7 @@ func (c *client) TransactionSubscribe(subscriptionID string, filter TransactionS
 		return nil, fmt.Errorf("subscription with ID %s already exists", subscriptionID)
 	}
 
-	sub := &subscription{
+	sub := &Subscription{
 		ID:       subscriptionID,
 		Method:   "transactionSubscribe",
 		UpdateCh: make(chan interface{}, 100), // Buffered channel
@@ -108,7 +108,7 @@ func (c *client) TransactionSubscribe(subscriptionID string, filter TransactionS
 }
 
 // AccountSubscribe sends an account subscription request and returns a channel to receive messages.
-func (c *client) AccountSubscribe(subscriptionID string, account string, options *AccountSubscribeOptions) (chan interface{}, error) {
+func (c *Client) AccountSubscribe(subscriptionID string, account string, options *AccountSubscribeOptions) (chan interface{}, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -116,7 +116,7 @@ func (c *client) AccountSubscribe(subscriptionID string, account string, options
 		return nil, fmt.Errorf("subscription with ID %s already exists", subscriptionID)
 	}
 
-	sub := &subscription{
+	sub := &Subscription{
 		ID:       subscriptionID,
 		Method:   "accountSubscribe",
 		UpdateCh: make(chan interface{}, 100), // Buffered channel
@@ -145,7 +145,7 @@ func (c *client) AccountSubscribe(subscriptionID string, account string, options
 }
 
 // listen listens for incoming messages.
-func (c *client) listen() {
+func (c *Client) listen() {
 	defer c.wg.Done()
 	for {
 		select {
@@ -165,7 +165,7 @@ func (c *client) listen() {
 }
 
 // handleMessage handles incoming messages and routes them to the appropriate subscription channel.
-func (c *client) handleMessage(message []byte) {
+func (c *Client) handleMessage(message []byte) {
 	var msg map[string]interface{}
 	err := json.Unmarshal(message, &msg)
 	if err != nil {

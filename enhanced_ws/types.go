@@ -55,7 +55,7 @@ type TransactionNotification struct {
 		Subscription int64 `json:"subscription"`
 		Result       struct {
 			Transaction struct {
-				Transaction []interface{} `json:"transaction"`
+				Transaction interface{} `json:"transaction"` // Using interface{} here to handle dynamic data
 				Meta        struct {
 					Err                  interface{}   `json:"err"`
 					Status               interface{}   `json:"status"`

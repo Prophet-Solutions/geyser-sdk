@@ -82,6 +82,38 @@ func (c *Client) Ping(count int32) (*geyser_pb.PongResponse, error) {
 	return c.Geyser.Ping(c.Ctx, &geyser_pb.PingRequest{Count: count})
 }
 
+func (c *Client) AddStreamClientWithoutSubscribe(ctx context.Context, streamName string, commitmentLevel *geyser_pb.CommitmentLevel) error {
+	c.s.mu.Lock()
+	defer c.s.mu.Unlock()
+
+	if _, exists := c.s.clients[streamName]; exists {
+		return fmt.Errorf("client with name %s already exists", streamName)
+	}
+
+	streamClient := &StreamClient{
+		Ctx:    ctx,
+		geyser: nil,
+		request: &geyser_pb.SubscribeRequest{
+			Accounts:           make(map[string]*geyser_pb.SubscribeRequestFilterAccounts),
+			Slots:              make(map[string]*geyser_pb.SubscribeRequestFilterSlots),
+			Transactions:       make(map[string]*geyser_pb.SubscribeRequestFilterTransactions),
+			TransactionsStatus: make(map[string]*geyser_pb.SubscribeRequestFilterTransactions),
+			Blocks:             make(map[string]*geyser_pb.SubscribeRequestFilterBlocks),
+			BlocksMeta:         make(map[string]*geyser_pb.SubscribeRequestFilterBlocksMeta),
+			Entry:              make(map[string]*geyser_pb.SubscribeRequestFilterEntry),
+			AccountsDataSlice:  make([]*geyser_pb.SubscribeRequestAccountsDataSlice, 0),
+			Commitment:         commitmentLevel,
+		},
+		UpdateCh: make(chan *geyser_pb.SubscribeUpdate),
+		ErrCh:    make(chan error),
+		mu:       sync.RWMutex{},
+	}
+
+	c.s.clients[streamName] = streamClient
+
+	return nil
+}
+
 // AddStreamClient creates a new Geyser subscribe stream client. You can retrieve it with GetStreamClient.
 func (c *Client) AddStreamClient(ctx context.Context, streamName string, commitmentLevel *geyser_pb.CommitmentLevel, opts ...grpc.CallOption) error {
 	c.s.mu.Lock()
